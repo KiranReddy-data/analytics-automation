@@ -1,0 +1,168 @@
+# Analytics Automation -- Recurring Reporting Pipeline
+
+## Overview
+
+A configuration-driven pipeline that automates the repetitive parts of
+recurring reporting: load a raw extract, validate it against a set of rules,
+compute a defined set of KPIs, and write a timestamped output file plus a
+run log -- all controlled by a JSON config rather than hardcoded logic, so
+the same script can run against a new dataset or KPI definition without a
+code change. All data is synthetic, generated in Python.
+
+## Why This Project Exists
+
+Every analytics role eventually has a version of this problem: the same
+report needs to run weekly or monthly, pulling the same kind of validation
+and the same KPI definitions, and doing it by hand is both slow and a source
+of inconsistency. This project is the pattern I'd reach for to eliminate
+that -- not a scheduler or orchestration platform, but the actual pipeline
+logic that a scheduler would call.
+
+## End-to-End Workflow
+
+```
+RAW DATA  ->  VALIDATION  ->  KPI GENERATION  ->  REPORT OUTPUT  ->  LOGGING / EXCEPTION HANDLING
+```
+
+1. **Load** a raw CSV extract (`load_data`).
+2. **Validate** it against rules defined in `config/pipeline_config.json`
+   (not-null, uniqueness, range checks), logging every pass/fail
+   (`validate_data`).
+3. **Compute KPIs** defined in the same config -- simple aggregations
+   (sum/mean/count), optionally grouped by a dimension column
+   (`compute_kpis`).
+4. **Write outputs**: a timestamped KPI report (CSV), a run log, and a
+   run-result summary (JSON) recording row counts, validation outcome, and
+   status -- the audit trail a scheduled job should leave behind.
+5. **Fail loudly, not silently**: a missing input file, a KPI referencing a
+   column that doesn't exist, or an unsupported aggregation type all raise a
+   `PipelineError` and produce a `FAILED` result with the reason recorded,
+   rather than crashing with a raw traceback or silently producing a wrong
+   number.
+
+## Configuration
+
+`config/pipeline_config.json` defines everything the pipeline needs to know
+about a specific report, so adding a new KPI or validation rule doesn't
+require touching the Python code:
+
+```json
+{
+  "halt_on_validation_failure": false,
+  "validation_rules": [
+    {"column": "transaction_id", "type": "unique"},
+    {"column": "amount", "type": "not_null"},
+    {"column": "amount", "type": "in_range", "min": 0, "max": 100000}
+  ],
+  "kpis": [
+    {"name": "total_revenue", "column": "amount", "aggregation": "sum"},
+    {"name": "revenue_by_region", "column": "amount", "aggregation": "sum", "group_by": "region"}
+  ]
+}
+```
+
+`halt_on_validation_failure` controls whether a validation failure stops the
+run (appropriate for a report that must never publish on bad data) or is
+logged as a warning while the run continues (appropriate for a report where
+a data owner reviews exceptions after the fact). Full config field
+definitions are in [`docs/data_dictionary.md`](docs/data_dictionary.md).
+
+## Error Handling & Logging
+
+Every run writes a dedicated log file (`pipeline_run_<timestamp>.log`) with
+INFO-level messages for normal progress and WARNING/ERROR for validation
+failures or halting conditions, plus a console stream for interactive runs.
+Three failure modes are handled explicitly and covered by tests:
+
+- Missing input file
+- A KPI definition referencing a column that doesn't exist in the data
+- An unsupported aggregation type in the config
+
+In each case the pipeline returns a `PipelineResult` with `status='FAILED'`
+and the specific reason, rather than raising an unhandled exception.
+
+## Example Output
+
+Generated logs and KPI reports from actual runs are gitignored under
+`data/processed/` since they're run artifacts, not source -- but a
+representative example of each is committed under
+[`outputs/example_kpi_report.csv`](outputs/example_kpi_report.csv) and
+[`outputs/example_pipeline_run.log`](outputs/example_pipeline_run.log) so the
+output shape is visible without running the pipeline. Both were produced by
+an actual run against the synthetic `transactions.csv` (3,010 rows,
+including 20 injected duplicate transaction IDs and 15 injected nulls in the
+amount column), and reflect real numbers computed from that data, not
+hand-written placeholders.
+
+## SQL Equivalent
+
+`sql/01_kpi_and_validation_queries.sql` implements the same validation and
+KPI logic in SQL, for the case where this needs to run as a scheduled
+warehouse query rather than a Python process.
+
+## Project Structure
+
+```
+analytics-automation/
+├── README.md
+├── config/
+│   └── pipeline_config.json
+├── data/
+│   ├── raw/                  # synthetic input (generate locally)
+│   └── processed/            # KPI reports, logs, run results (gitignored)
+├── outputs/
+│   ├── example_kpi_report.csv
+│   └── example_pipeline_run.log
+├── sql/
+│   └── 01_kpi_and_validation_queries.sql
+├── python/
+│   └── reporting_pipeline.py
+├── tests/
+│   └── test_reporting_pipeline.py
+├── docs/
+│   └── data_dictionary.md
+├── requirements.txt
+└── .gitignore
+```
+
+## How to Run
+
+```bash
+pip install -r requirements.txt
+cd python
+python reporting_pipeline.py
+```
+
+Run tests with:
+
+```bash
+pytest tests/
+```
+
+Tests cover: validation rule logic (unique/not-null detection), KPI
+computation (simple and grouped aggregation), and error handling (missing
+column, unsupported aggregation type) -- the core logic units, exercised
+directly rather than through a full pipeline run.
+
+## Limitations
+
+- This is a file-based, single-machine pipeline with no real scheduler
+  attached -- running it "recurringly" in this repo means invoking the
+  script again, not an actual cron job or orchestration tool.
+- Supported aggregations are intentionally limited to sum/mean/count and
+  validation rules to not-null/unique/in-range, to keep the config format
+  simple to read and test.
+- No claim is made that this pipeline is deployed anywhere or has produced
+  real business impact -- it's a demonstration of the pattern, built and
+  tested against synthetic data.
+
+## Future Improvements
+
+- Add a scheduler wrapper (cron, Airflow, or similar) so this becomes an
+  actually recurring job rather than a script invoked manually.
+- Extend the KPI config to support the reusable validation rule types from
+  the `data-quality-reconciliation-framework` project (referential
+  integrity, business rules, outlier detection) rather than the smaller set
+  implemented directly here.
+- Add email/Slack notification on pipeline failure, using the existing
+  `PipelineResult` status as the trigger condition.

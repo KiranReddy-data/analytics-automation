@@ -1,0 +1,13 @@
+2026-09-06 15:42:36,001 [INFO] === Pipeline run started ===
+2026-09-06 15:42:36,002 [INFO] Loading data from ../data/raw/transactions.csv
+2026-09-06 15:42:36,015 [INFO] Loaded 3010 rows, 5 columns
+2026-09-06 15:42:36,018 [WARNING] Validation failed: transaction_id / unique -- 20 rows flagged
+2026-09-06 15:42:36,020 [WARNING] Validation failed: amount / not_null -- 15 rows flagged
+2026-09-06 15:42:36,021 [INFO] Validation passed: amount / in_range
+2026-09-06 15:42:36,030 [INFO] Computed KPI: total_revenue
+2026-09-06 15:42:36,031 [INFO] Computed KPI: avg_transaction_value
+2026-09-06 15:42:36,032 [INFO] Computed KPI: transaction_count
+2026-09-06 15:42:36,040 [INFO] Computed KPI: revenue_by_region
+2026-09-06 15:42:36,048 [INFO] Computed KPI: revenue_by_category
+2026-09-06 15:42:36,050 [INFO] KPI report written to ../data/processed/kpi_report_20260906_154236.csv
+2026-09-06 15:42:36,051 [INFO] === Pipeline run finished: SUCCESS ===

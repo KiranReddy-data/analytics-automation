@@ -1,0 +1,15 @@
+{
+  "halt_on_validation_failure": false,
+  "validation_rules": [
+    {"column": "transaction_id", "type": "unique"},
+    {"column": "amount", "type": "not_null"},
+    {"column": "amount", "type": "in_range", "min": 0, "max": 100000}
+  ],
+  "kpis": [
+    {"name": "total_revenue", "column": "amount", "aggregation": "sum"},
+    {"name": "avg_transaction_value", "column": "amount", "aggregation": "mean"},
+    {"name": "transaction_count", "column": "transaction_id", "aggregation": "count"},
+    {"name": "revenue_by_region", "column": "amount", "aggregation": "sum", "group_by": "region"},
+    {"name": "revenue_by_category", "column": "amount", "aggregation": "sum", "group_by": "product_category"}
+  ]
+}

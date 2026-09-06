@@ -1,0 +1,12 @@
+kpi_name,group_by,group_value,value
+total_revenue,,,722441.85
+avg_transaction_value,,,241.22
+transaction_count,,,3010.0
+revenue_by_region,region,Midwest,168163.55
+revenue_by_region,region,Northeast,182118.32
+revenue_by_region,region,South,192305.44
+revenue_by_region,region,West,179854.54
+revenue_by_category,product_category,Hardware,185628.05
+revenue_by_category,product_category,Services,159417.68
+revenue_by_category,product_category,Software,204568.87
+revenue_by_category,product_category,Support,172827.25
